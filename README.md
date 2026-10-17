@@ -26,7 +26,7 @@ git add -A && git commit -m "Add 2026-10-23 post" && git push
   `assets/default-hero.png`), writes `posts/<date>/index.html`, and regenerates `index.html` and `feed.xml`
   (newest first) from `posts.json`. Re-running the same date replaces that post.
 - Each run also regenerates `embed.html` and `godaddy-embed-snippet.html`. If the iframe height changes (it grows
-  for the first four posts: 360 → 470 → 575 → 680 px, then stays at 680), the script prints a NOTE; re-paste the
+  for the first four posts: 390 → 500 → 605 → 710 px, then stays at 710), the script prints a NOTE; re-paste the
   snippet into GoDaddy then. Otherwise the GoDaddy section updates by itself.
 - GitHub Pages republishes about a minute after the push. GoDaddy picks up the feed on its own refresh schedule.
 

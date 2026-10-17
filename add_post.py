@@ -230,9 +230,9 @@ p{{margin:0 0 10px;font-size:14px;line-height:1.45;display:-webkit-box;-webkit-b
 """
 
 def embed_height(n_posts):
-    """iframe height (px) that fits embed.html with no inner scrollbar at widths >= 360px."""
+    """iframe height (px) that fits embed.html with no inner scrollbar at widths >= 300px."""
     shown = max(1, min(n_posts, 1 + EMBED_MAX_OLDER))
-    return {1: 360, 2: 470, 3: 575}.get(shown, 680)
+    return {1: 390, 2: 500, 3: 605}.get(shown, 710)
 
 def godaddy_snippet(n_posts):
     h = embed_height(n_posts)
