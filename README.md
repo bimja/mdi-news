@@ -25,8 +25,18 @@ git add -A && git commit -m "Add 2026-10-23 post" && git push
   the post date, renders `posts/<date>/hero.png` (1200x630) with headless Chrome (`--no-hero` reuses
   `assets/default-hero.png`), writes `posts/<date>/index.html`, and regenerates `index.html` and `feed.xml`
   (newest first) from `posts.json`. Re-running the same date replaces that post.
+- Each run also regenerates `embed.html` and `godaddy-embed-snippet.html`. If the iframe height changes (it grows
+  for the first four posts: 360 → 470 → 575 → 680 px, then stays at 680), the script prints a NOTE; re-paste the
+  snippet into GoDaddy then. Otherwise the GoDaddy section updates by itself.
 - GitHub Pages republishes about a minute after the push. GoDaddy picks up the feed on its own refresh schedule.
 
+## GoDaddy embed
+GoDaddy shows the list through **Add Section → Files and web → HTML**, which places the code in a sandboxed iframe.
+Paste the contents of `godaddy-embed-snippet.html` there. It loads https://bimja.github.io/mdi-news/embed.html: a static
+(no JavaScript), white, margin-free list of the newest post (featured) plus up to 3 older posts. Each one has a hero
+thumbnail, title, date, short excerpt and a "Read more" link that opens the full post in a new tab. Below the iframe is
+a plain link to the site in case the iframe is blocked. If GoDaddy's sandbox ever blocks new tabs, the plain link still works.
+
 ## Layout
-`index.html` post list · `posts/<date>/` post page, content and hero · `feed.xml` RSS 2.0 (content:encoded, enclosure,
+`index.html` post list · `embed.html` GoDaddy iframe list · `godaddy-embed-snippet.html` paste code · `posts/<date>/` post page, content and hero · `feed.xml` RSS 2.0 (content:encoded, enclosure,
 media:content) · `posts.json` post index · `assets/` logo, favicon and fallback hero · `.nojekyll`.

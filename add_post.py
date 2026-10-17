@@ -12,8 +12,8 @@ The script:
     logo hosted in this repo, sets the "Published" line to the post date),
   * renders a 1200x630 hero image (posts/<date>/hero.png) with headless Chrome,
   * writes posts/<date>/index.html and posts/<date>/content.html,
-  * records the post in posts.json (newest first) and regenerates index.html
-    and feed.xml (RSS 2.0) from it.
+  * records the post in posts.json (newest first) and regenerates index.html,
+    embed.html (GoDaddy iframe list) and feed.xml (RSS 2.0) from it.
 Re-running for the same date replaces that post. Then: git add -A && git commit && git push.
 """
 import argparse, datetime as dt, html, json, os, re, shutil, subprocess, sys, tempfile
@@ -175,6 +175,71 @@ def index_html(posts):
     body = '<h1 style="color:%s;font-size:24px;margin:4px 0 16px">Newsletter</h1>\n' % NAVY + "\n".join(cards or ["<p>No posts yet.</p>"])
     return page(SITE_TITLE, body, SITE_DESC, SITE_URL)
 
+EMBED_MAX_OLDER = 3  # older posts listed under the featured one
+
+def embed_html(posts):
+    """Static, iframe-friendly list for GoDaddy's HTML section (no JS, no margins, white bg)."""
+    def a(p, inner, cls=""):
+        return f'<a class="{cls}" href="{p["url"]}" target="_blank" rel="noopener">{inner}</a>'
+    parts = []
+    if posts:
+        f = posts[0]
+        parts.append(f"""<article class="feat">
+{a(f, f'<img src="{f["image"]}" alt="" loading="lazy">', "fimg")}
+<div class="ftx"><div class="tag">Latest update · {html.escape(f['date_label'])}</div>
+<h2>{a(f, html.escape(f['title']))}</h2>
+<p>{html.escape(f['excerpt'])}</p>
+{a(f, 'Read more &rarr;', 'more')}</div></article>""")
+        for p in posts[1:1 + EMBED_MAX_OLDER]:
+            parts.append(f"""<article class="row">
+{a(p, f'<img src="{p["image"]}" alt="" loading="lazy">', "rimg")}
+<div class="rtx"><h3>{a(p, html.escape(p['title']))}</h3><div class="d">{html.escape(p['date_label'])}</div>
+<p>{html.escape(p['excerpt'])}</p>{a(p, 'Read more &rarr;', 'more')}</div></article>""")
+    else:
+        parts.append("<p>No updates yet.</p>")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(SITE_TITLE)} – latest updates</title><base target="_blank">
+<style>
+*{{box-sizing:border-box}}
+html,body{{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#2b2b2b}}
+a{{color:{NAVY};text-decoration:none}} a:hover{{text-decoration:underline}}
+.wrap{{max-width:1000px;margin:0 auto;padding:2px}}
+article{{background:#fff;border:1px solid #dde1e8;border-radius:8px;overflow:hidden}}
+.feat{{display:flex;border-top:4px solid {NAVY};margin-bottom:12px}}
+.fimg{{flex:0 0 46%;display:block;background:{NAVY}}} .fimg img{{display:block;width:100%;height:100%;min-height:200px;max-height:260px;object-fit:cover}}
+.ftx{{padding:16px 20px;display:flex;flex-direction:column;justify-content:center;min-width:0}}
+.tag{{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:#6b6b6b;margin-bottom:6px}}
+h2{{margin:0 0 8px;font-size:21px;line-height:1.25}} h3{{margin:0 0 2px;font-size:15px;line-height:1.3}}
+p{{margin:0 0 10px;font-size:14px;line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}}
+.feat p{{-webkit-line-clamp:3}}
+.more{{font-size:14px;font-weight:bold}}
+.row{{display:flex;margin-bottom:10px;height:96px}}
+.rimg{{flex:0 0 172px;display:block}} .rimg img{{display:block;width:172px;height:96px;object-fit:cover}}
+.rtx{{padding:8px 14px;min-width:0}} .row p{{margin:2px 0;font-size:13px;-webkit-line-clamp:1}} .row .more{{font-size:13px}}
+.d{{font-size:12px;color:#6b6b6b}}
+.all{{display:block;text-align:right;font-size:13px;padding:2px 4px 0}}
+@media(max-width:600px){{
+ .feat{{display:block}} .fimg img{{height:150px;max-height:150px;min-height:0}} .ftx{{padding:12px 14px}} h2{{font-size:18px}}
+ .rimg{{flex-basis:110px}} .rimg img{{width:110px}} .row p{{display:none}}
+}}
+</style></head><body><div class="wrap">
+{chr(10).join(parts)}
+<a class="all" href="{SITE_URL}" target="_blank" rel="noopener">All MDI updates &rarr;</a>
+</div></body></html>
+"""
+
+def embed_height(n_posts):
+    """iframe height (px) that fits embed.html with no inner scrollbar at widths >= 360px."""
+    shown = max(1, min(n_posts, 1 + EMBED_MAX_OLDER))
+    return {1: 360, 2: 470, 3: 575}.get(shown, 680)
+
+def godaddy_snippet(n_posts):
+    h = embed_height(n_posts)
+    return f"""<iframe src="{SITE_URL}embed.html" title="MDI &amp; Associates weekly updates" width="100%" height="{h}" style="width:100%;height:{h}px;border:0;display:block;overflow:hidden;" scrolling="no" frameborder="0" loading="lazy"></iframe>
+<p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;"><a href="{SITE_URL}" target="_blank" rel="noopener">View all MDI &amp; Associates weekly updates</a></p>
+"""
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder"); ap.add_argument("date", help="post date YYYY-MM-DD (America/Chicago)")
@@ -210,7 +275,14 @@ def main():
     json.dump(posts, open(jpath, "w"), indent=2, ensure_ascii=False)
     open(os.path.join(ROOT, "feed.xml"), "w", encoding="utf-8").write(rss(posts))
     open(os.path.join(ROOT, "index.html"), "w", encoding="utf-8").write(index_html(posts))
+    open(os.path.join(ROOT, "embed.html"), "w", encoding="utf-8").write(embed_html(posts))
     open(os.path.join(ROOT, ".nojekyll"), "a").close()
+    spath = os.path.join(ROOT, "godaddy-embed-snippet.html")
+    old = open(spath, encoding="utf-8").read() if os.path.isfile(spath) else ""
+    new = godaddy_snippet(len(posts))
+    open(spath, "w", encoding="utf-8").write(new)
+    if old and old != new:
+        print(f"NOTE: GoDaddy iframe height is now {embed_height(len(posts))}px. Re-paste godaddy-embed-snippet.html into the HTML section.")
     print(f"Added: {title}\n  {url}\n  {len(posts)} post(s) in feed. Next: git add -A && git commit -m 'Add {slug} post' && git push")
 
 if __name__ == "__main__":
