@@ -2,7 +2,7 @@
 """Add a weekly MDI newsletter post to the mdi-news GitHub Pages site.
 
 Usage:
-    python3 add_post.py <newsletter_folder> <YYYY-MM-DD> [--title "..."] [--no-hero]
+    python3 add_post.py <newsletter_folder> <YYYY-MM-DD> [--title "..."] [--slug SLUG] [--hero-kicker "..."] [--hero-week "..."] [--no-hero]
 
 <newsletter_folder> must contain newsletter-public-snippet.html (the PUBLIC-SAFE
 version). The internal newsletter files are never read.
@@ -58,6 +58,9 @@ def extract(s):
     m = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S)
     headline = text_of(m.group(1)) if m else "MDI Week in Review"
     items = [text_of(x) for x in re.findall(r"<li[^>]*>(.*?)</li>", s, re.S)]
+    if not items:
+        items = [text_of(x) for x in re.findall(r"<p[^>]*>(.*?)</p>", s, re.S)]
+        items = [x for x in items if x]
     excerpt = " ".join(items[:2]) if items else headline
     if len(excerpt) > 280:
         excerpt = excerpt[:277].rsplit(" ", 1)[0] + "…"
@@ -107,7 +110,7 @@ body{background:linear-gradient(135deg,#1b2a4a 0%,#2c4475 100%);font-family:Aria
 .h{font-size:26px;line-height:1.35;color:#e6ebf5;border-left:5px solid #7fa2e0;padding-left:18px}
 .f{position:absolute;bottom:28px;right:64px;font-size:22px;color:#c9d3e6}
 </style></head><body><div class="l"><img src="LOGO"></div><div class="r">
-<div class="k">MDI Weekly Update</div><div class="t">WEEK</div><div class="h">HEAD</div></div>
+<div class="k">KICKER</div><div class="t">WEEK</div><div class="h">HEAD</div></div>
 <div class="f">MDI &amp; Associates LLC · mdipros.com</div></body></html>"""
 
 def find_chrome():
@@ -116,12 +119,13 @@ def find_chrome():
         if p: return p
     return None
 
-def make_hero(out_png, week_label, headline):
+def make_hero(out_png, week_label, headline, kicker="MDI Weekly Update"):
     chrome = find_chrome()
     if not chrome:
         return False
     short = headline if len(headline) <= 170 else headline[:167].rsplit(" ", 1)[0] + "…"
     doc = (HERO_TMPL.replace("LOGO", "file://" + os.path.join(ROOT, "assets", "mdi-logo.jpg"))
+           .replace("KICKER", html.escape(kicker or "MDI Weekly Update"))
            .replace("WEEK", html.escape(week_label)).replace("HEAD", html.escape(short)))
     with tempfile.TemporaryDirectory() as td:
         f = os.path.join(td, "hero.html"); open(f, "w", encoding="utf-8").write(doc)
@@ -244,6 +248,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder"); ap.add_argument("date", help="post date YYYY-MM-DD (America/Chicago)")
     ap.add_argument("--title", help="override item title (keep under 65 chars)")
+    ap.add_argument("--slug", help="url slug under posts/ (default: the post date; use e.g. 2026-11-17-houston-edit to avoid colliding with a Friday newsletter)")
+    ap.add_argument("--hero-kicker", default="MDI Weekly Update", help="small all-caps label on the hero image")
+    ap.add_argument("--hero-week", help="large line on the hero image (default: Week of <Monday>)")
+    ap.add_argument("--hero-file", help="use this 1200x630 PNG as the hero instead of rendering")
     ap.add_argument("--no-hero", action="store_true", help="reuse assets/default-hero.png instead of rendering")
     a = ap.parse_args()
     d = dt.date.fromisoformat(a.date)
@@ -252,12 +260,18 @@ def main():
     headline, excerpt = extract(snippet)
     title = a.title or week_title(d)
     if len(title) >= 65: die(f"title is {len(title)} chars; keep it under 65")
-    slug = d.isoformat()
+    slug = a.slug or d.isoformat()
+    if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._-]*", slug):
+        die(f"invalid slug {slug!r}")
     pdir = os.path.join(ROOT, "posts", slug); os.makedirs(pdir, exist_ok=True)
     url = f"{SITE_URL}posts/{slug}/"
     hero = os.path.join(pdir, "hero.png")
     monday = d - dt.timedelta(days=d.weekday())
-    if a.no_hero or not make_hero(hero, f"Week of {monday.strftime('%b')} {monday.day}, {monday.year}", headline):
+    week_label = a.hero_week or f"Week of {monday.strftime('%b')} {monday.day}, {monday.year}"
+    if a.hero_file:
+        if not os.path.isfile(a.hero_file): die(f"hero file not found: {a.hero_file}")
+        shutil.copy(a.hero_file, hero)
+    elif a.no_hero or not make_hero(hero, week_label, headline, kicker=a.hero_kicker):
         src = os.path.join(ROOT, "assets", "default-hero.png")
         if not os.path.isfile(src): die("could not render hero and assets/default-hero.png is missing")
         shutil.copy(src, hero)
